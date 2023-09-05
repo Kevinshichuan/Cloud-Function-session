@@ -21,3 +21,13 @@ CLOUD-FUNCTION-SESSION
           +- index.js  # Built/transpiled JavaScript code
           |
           +- index.js.map # Source map for debugging
+
+
+
+
+
+Reference: 
+
+https://medium.com/firebase-developers/how-to-schedule-a-cloud-function-to-run-in-the-future-in-order-to-build-a-firestore-document-ttl-754f9bf3214a
+
+https://firebase.google.com/docs/functions/typescript
