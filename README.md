@@ -23,6 +23,10 @@ CLOUD-FUNCTION-SESSION
           +- index.js.map # Source map for debugging
 
 
+TODO:
+1. Configuration of Cloud Tasks
+2. Check the unique Session id or callback the tasks
+3. Testing (local and remote)
 
 
 
