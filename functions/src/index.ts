@@ -28,7 +28,7 @@ export const scheduleSessionExpiry = functions.firestore.document('users/{userId
         return;
     }
 
-    const { startTime, endTime } = sessionData;
+    const { startTime, endTime,sessionId } = sessionData;
 
     // Error handling: Ensure both startTime and endTime are valid numbers
     if (typeof startTime !== 'number' || typeof endTime !== 'number') {
@@ -39,13 +39,17 @@ export const scheduleSessionExpiry = functions.firestore.document('users/{userId
     // Calculate the session duration in milliseconds
     const DurationTime = endTime - startTime; 
 
+    
+
     // Define the task to be scheduled. It will make an HTTP POST request to the `clearSession` function
     // this structure is followed by the article that I provided at the begin
     const task = {
         httpRequest: {
             httpMethod: 'POST',
             url: FUNCTION_URL,
-            body: Buffer.from(JSON.stringify({ userId: context.params.userId })).toString('base64'),
+            body: Buffer.from(JSON.stringify({ userId: context.params.userId,
+                                               sessionId: sessionId // Including sessionId in the task payload
+                                           })).toString('base64'),
             headers: {
                 'Content-Type': 'application/json',
             },
@@ -77,25 +81,32 @@ export const scheduleSessionExpiry = functions.firestore.document('users/{userId
  */
 
 export const clearSession = functions.https.onRequest(async (req, res) => {
-    const userId = req.body.userId;
 
-    // Error handling: Ensure the user ID is provided in the request body
-    if (!userId) {
-        console.error("User ID not provided in the request body.");
-        res.status(400).send('User ID not provided.');
-        return;
-    }
+  const { userId, sessionId } = req.body; // Destructuring both userId and sessionId from the request body
 
-    // Reference to the specific user document in Firestore
-    const userRef = admin.firestore().collection('users').doc(userId);
+  if (!userId || !sessionId) {
+      console.error("User ID or Session ID not provided in the request body.");
+      res.status(400).send('User ID or Session ID not provided.');
+      return;
+  }
 
-    // Try to update the user document to clear the session field
-    try {
-        await userRef.update({ session: null });
-        console.log(`Session cleared for user: ${userId}`);
-        res.status(200).send('Session cleared.');
-    } catch (error) {
-        console.error(`Error clearing session for user ${userId}:`, error);
-        res.status(500).send('Failed to clear session.');
-    }
+  const userRef = admin.firestore().collection('users').doc(userId);
+  const userSnapshot = await userRef.get();
+
+  const currentSession = userSnapshot.data()?.session;
+
+  // Check if the sessionId from the Cloud Task matches the current sessionId in the Firestore document
+  if (currentSession && currentSession.sessionId === sessionId) {
+      try {
+          await userRef.update({ session: null });
+          console.log(`Session cleared for user: ${userId}`);
+          res.status(200).send('Session cleared.');
+      } catch (error) {
+          console.error(`Error clearing session for user ${userId}:`, error);
+          res.status(500).send('Failed to clear session.');
+      }
+  } else {
+      console.log(`Session for user ${userId} has already been ended or updated.`);
+      res.status(200).send(`Session for user ${userId} has already been ended or updated.`);
+  }
 });
