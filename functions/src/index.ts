@@ -13,6 +13,7 @@ const cloudTasksClient = new CloudTasksClient();
 const PROJECT_ID = 'PROJECT_ID';   // Replace with Firebase Project ID
 const QUEUE = '=QUEUE_NAME';        // Replace with Cloud Tasks Queue name
 const LOCATION = 'LOCATION';       // Replace with the location of Cloud Tasks queue
+
 const FUNCTION_URL = `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net/clearSession`;  // The URL endpoint the task will hit
 
 /**
@@ -20,58 +21,57 @@ const FUNCTION_URL = `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net/clear
  * Once a user document is created, it schedules a task to clear their session after their specified DurationTime.
  * change
  */
-export const scheduleSessionExpiry = functions.firestore.document('users/{userId}').onCreate(async (snapshot, context) => {
-    const sessionData = snapshot.data()?.session;
 
-    // Error handling: Check if session data exists for the created user document
-    if (!sessionData) {
-        console.error("No session data found for user:", context.params.userId);
-        return;
-    }
+export const scheduleSessionExpiry = functions.firestore.document('users/{userId}').onUpdate(async (change, context) => {
+    const beforeSession = change.before.data()?.session;
+    const afterSession = change.after.data()?.session;
 
-    const { startTime, endTime,sessionId } = sessionData;
+        // If session was updated from null to a non-null value, proceed
+    if (!beforeSession && afterSession) {
+        const { startTime, stopTime,id } = afterSession;
 
-    // Error handling: Ensure both startTime and endTime are valid numbers
-    if (typeof startTime !== 'number' || typeof endTime !== 'number') {
-        console.error("Invalid startTime or endTime for user:", context.params.userId);
-        return;
-    }
+      // Error handling: Ensure both startTime and endTime are valid numbers
+      if (typeof startTime !== 'number' || typeof stopTime !== 'number') {
+          console.error("Invalid startTime or endTime for user:", context.params.userId);
+          return;
+      }
 
-    // Calculate the session duration in milliseconds
-    const DurationTime = endTime - startTime; 
+      // Calculate the session duration in milliseconds
+      const DurationTime = stopTime - startTime; 
 
-    
+      
 
-    // Define the task to be scheduled. It will make an HTTP POST request to the `clearSession` function
-    // this structure is followed by the article that I provided at the begin
-    const task = {
-        httpRequest: {
-            httpMethod: 'POST',
-            url: FUNCTION_URL,
-            body: Buffer.from(JSON.stringify({ userId: context.params.userId,
-                                               sessionId: sessionId // Including sessionId in the task payload
-                                           })).toString('base64'),
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        },
-        // Set the scheduled time for the task based on the current time + DurationTime
-        // convert milsecond to sec
-        scheduleTime: {
-            seconds: Math.floor(Date.now() / 1000) + Math.floor(DurationTime / 1000)
-        }
-    };
+      // Define the task to be scheduled. It will make an HTTP POST request to the `clearSession` function
+      // this structure is followed by the article that I provided at the begin
+      const task = {
+          httpRequest: {
+              httpMethod: 'POST',
+              url: FUNCTION_URL,
+              body: Buffer.from(JSON.stringify({ userId: context.params.userId,
+                                                sessionId: id // Including sessionId in the task payload
+                                            })).toString('base64'),
+              headers: {
+                  'Content-Type': 'application/json',
+              },
+          },
+          // Set the scheduled time for the task based on the current time + DurationTime
+          // convert milsecond to sec
+          scheduleTime: {
+              seconds: Math.floor(Date.now() / 1000) + Math.floor(DurationTime / 1000)
+          }
+      };
 
-    // Construct the full path for the Cloud Tasks queue
-    const parent = cloudTasksClient.queuePath(PROJECT_ID, LOCATION, QUEUE);
+      // Construct the full path for the Cloud Tasks queue
+      const parent = cloudTasksClient.queuePath(PROJECT_ID, LOCATION, QUEUE);
 
-    // Try to create and schedule the task
-    try {
-        const [response] = await cloudTasksClient.createTask({ parent, task });
-        console.log(`Task created: ${response.name}`);
-    } catch (error) {
-        console.error('Error scheduling a task:', error);
-        throw new functions.https.HttpsError('internal', 'Failed to schedule a task.');
+      // Try to create and schedule the task
+      try {
+          const [response] = await cloudTasksClient.createTask({ parent, task });
+          console.log(`Task created: ${response.name}`);
+      } catch (error) {
+          console.error('Error scheduling a task:', error);
+          throw new functions.https.HttpsError('internal', 'Failed to schedule a task.');
+      }
     }
 });
 
