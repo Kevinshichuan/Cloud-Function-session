@@ -18,6 +18,7 @@ const FUNCTION_URL = `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net/clear
 /**
  * Firestore trigger that listens for new user documents.
  * Once a user document is created, it schedules a task to clear their session after their specified DurationTime.
+ * change
  */
 export const scheduleSessionExpiry = functions.firestore.document('users/{userId}').onCreate(async (snapshot, context) => {
     const sessionData = snapshot.data()?.session;
