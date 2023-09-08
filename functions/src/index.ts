@@ -1,16 +1,10 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { projectID } from 'firebase-functions/params';
-import * as dotenv from 'dotenv'
-dotenv.config
 
 const { CloudTasksClient } = require('@google-cloud/tasks');
 
-const jwt = require('jsonwebtoken');
-
-const express = require('express');
-
-const router = express.Router();
+const { createHash } = require('crypto');
 
 // Initialize Firebase Admin SDK to interact with Firebase services
 admin.initializeApp();
@@ -43,7 +37,6 @@ export const scheduleSessionExpiry = functions.firestore.document('users/{userId
       // Error handling: Ensure both startTime and endTime are valid numbers
       if (typeof startTime !== 'number' || typeof stopTime !== 'number') {
           console.error("Invalid startTime or endTime for user:", context.params.userId);
-          return;
       }
 
       // Calculate the session duration in milliseconds
@@ -90,9 +83,9 @@ export const scheduleSessionExpiry = functions.firestore.document('users/{userId
           console.error('Error scheduling a task:', error);
           throw new functions.https.HttpsError('internal', 'Failed to schedule a task.');
       }
-    } else { // if it goes in this statement -> it always has a beforeSession (user has to already created the task before)
-        await callBackDeleteTask(beforeSession, afterSession);
-    }
+    } else if(beforeSession && !afterSession) { // if it goes in this statement -> it always has a beforeSession (user has to already created the task before)
+        await callBackDeleteTask(beforeSession);
+    } 
 });
 
 /**
@@ -145,39 +138,12 @@ export const clearSession = functions.https.onRequest(async (req, res) => {
 */
 
 // Call Back function to detect if the session has been changed
-async function callBackDeleteTask(beforeSession: any, afterSession: any) {
+async function callBackDeleteTask(beforeSession: any) {
     // get the data before the change and after the change
-    const secretKey = process.env.JWT_SECRET_KEY;
-
-    // If the session from non-null to non-null -> delete the task
-    // Can this also be non-null to null ????? Depends on how fast the document update with how fast this function will be called
-    if (afterSession) {
-        const updatedSessionId  = afterSession;
-        const previousSessionId = beforeSession;
-
-        if(updatedSessionId != previousSessionId) {
-            // Session has changed -> delete the associated tasks of the previous session
-            const taskIdentifiers = beforeSession.taskIdentifiers || [];
-
-            for(const taskIdentifier of taskIdentifiers) {
-                const [, taskSessionId] = jwt.verify(taskIdentifier, secretKey);
-
-                // compare the task session ID with updated session id
-                if(taskSessionId != updatedSessionId) {
-                    // Session has changed -> delete the associated task
-                    await deleteTask(taskIdentifier);
-                };
-            };
-        };
-    } else {
-        // if there is no afterSession -> the user doesn't create any other session after stop the previous session
-        // just delete the task
-        const taskIdentifiers = beforeSession.taskIdentifiers || [];
-        for(const taskIdentifier of taskIdentifiers) {
-            const [, taskSessionId] = jwt.verify(taskIdentifier, secretKey);
-            await deleteTask(taskIdentifier); // delete all the tasks remaining
-        }
-    };
+    // if there is no afterSession -> the user doesn't create any other session after stop the previous session
+    // just delete the task
+    const taskIdentifier = beforeSession.taskIdentifier ;
+    await deleteTask(taskIdentifier); // delete all the tasks remaining
 };
 
 // function to delete the cloud task via cloud task client
@@ -199,10 +165,8 @@ function generateUniqueTaskIdentifier(sessionId: any, userId: any) {
     // Combine the user id and the session id together
     const combinedString = `${sessionId}_${userId}`;
 
-    const secretKey = process.env.JWT_SECRET_KEY;
-    const token = jwt.sign(combinedString, secretKey); // encode the combined string into jwt web tokens for later comparison
-    
-    return token;
+    // hash the combined string using SHA-256 Family
+    return createHash('sha256').update(combinedString).digest('hex');
 };
 
 // helper function to store the task identifier to the firestore database
@@ -212,7 +176,7 @@ async function storeTaskIdentifierInFireStore(sessionId: any, userId: any, taskI
 
     // Add the task identifier to the user's document
     await userRef.update({
-        taskIdentifiers : admin.firestore.FieldValue.arrayUnion(taskIdentifier)
+        taskIdentifier : taskIdentifier
     })
 };
 
