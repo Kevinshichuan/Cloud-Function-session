@@ -1,13 +1,12 @@
-import * as functions from 'firebase-functions';
-import * as admin from 'firebase-admin';
+import * as functions from "firebase-functions";
+import * as admin from "firebase-admin";
 //import { projectID } from 'firebase-functions/params';
 
-const { CloudTasksClient } = require('@google-cloud/tasks');
+const { CloudTasksClient } = require("@google-cloud/tasks");
 
 //const { createHash } = require('crypto');
 
 // limits for the cloud tasks
-
 
 // Initialize Firebase Admin SDK to interact with Firebase services
 admin.initializeApp();
@@ -16,12 +15,12 @@ admin.initializeApp();
 const cloudTasksClient = new CloudTasksClient();
 
 // Constants for setting up Google Cloud Tasks
-// !!! We dont have it yet until we set up the gcp 
-const PROJECT_ID = 'geogrind-ab91e';   // Replace with Firebase Project ID
-const QUEUE = 'Sessionscheduler';        // Replace with Cloud Tasks Queue name
-const LOCATION = 'northamerica-northeast1';       // Replace with the location of Cloud Tasks queue
+// !!! We dont have it yet until we set up the gcp
+const PROJECT_ID = "geogrind-ab91e"; // Replace with Firebase Project ID
+const QUEUE = "Sessionscheduler"; // Replace with Cloud Tasks Queue name
+const LOCATION = "northamerica-northeast1"; // Replace with the location of Cloud Tasks queue
 
-const FUNCTION_URL = `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net/clearSession`;  // The URL endpoint the task will hit
+const FUNCTION_URL = `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net/clearSession`; // The URL endpoint the task will hit
 
 /**
  * Firestore trigger that listens for new user documents.
@@ -29,24 +28,29 @@ const FUNCTION_URL = `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net/clear
  * change
  */
 
-export const scheduleSessionExpiry = functions.firestore.document('users/{userId}').onUpdate(async (change, context) => {
+export const scheduleSessionExpiry = functions.firestore
+  .document("users/{userId}")
+  .onUpdate(async (change, context) => {
     const beforeSession = change.before.data()?.session;
     const afterSession = change.after.data()?.session;
-    
-    console.log('before if')
-        // If session was updated from null to a non-null value, proceed
+
+    console.log("before if");
+    // If session was updated from null to a non-null value, proceed
     if (!beforeSession && afterSession) {
-        console.log(`console log for schedule null to non-null`);
-   
-        const { startTime, stopTime, id } = afterSession;
+      console.log(`console log for schedule null to non-null`);
+
+      const { startTime, stopTime, id } = afterSession;
 
       // Error handling: Ensure both startTime and endTime are valid numbers
-      if (typeof startTime !== 'number' || typeof stopTime !== 'number') {
-          console.error("Invalid startTime or endTime for user:", context.params.userId);
+      if (typeof startTime !== "number" || typeof stopTime !== "number") {
+        console.error(
+          "Invalid startTime or endTime for user:",
+          context.params.userId
+        );
       }
 
       // Calculate the session duration in milliseconds
-      const DurationTime = stopTime - startTime; 
+      const DurationTime = stopTime - startTime;
 
       const sessionID = id;
       const userId = context.params.userId;
@@ -60,22 +64,26 @@ export const scheduleSessionExpiry = functions.firestore.document('users/{userId
       // Define the task to be scheduled. It will make an HTTP POST request to the `clearSession` function
       // this structure is followed by the article that I provided at the begin
       const task = {
-          httpRequest: {
-              httpMethod: 'POST',
-              url: FUNCTION_URL,
-              body: Buffer.from(JSON.stringify({ userId: userId, 
-                                                sessionId: sessionID // Including sessionId in the task payload
-                                                //taskId: taskUniqueId,
-                                            })).toString('base64'),
-              headers: {
-                  'Content-Type': 'application/json',
-              },
+        httpRequest: {
+          httpMethod: "POST",
+          url: FUNCTION_URL,
+          body: Buffer.from(
+            JSON.stringify({
+              userId: userId,
+              sessionId: sessionID, // Including sessionId in the task payload
+              //taskId: taskUniqueId,
+            })
+          ).toString("base64"),
+          headers: {
+            "Content-Type": "application/json",
           },
-          // Set the scheduled time for the task based on the current time + DurationTime
-          // convert milsecond to sec
-          scheduleTime: {
-              seconds: Math.floor(Date.now() / 1000) + Math.floor(DurationTime / 1000)
-          }
+        },
+        // Set the scheduled time for the task based on the current time + DurationTime
+        // convert milsecond to sec
+        scheduleTime: {
+          seconds:
+            Math.floor(Date.now() / 1000) + Math.floor(DurationTime / 1000),
+        },
       };
 
       // Construct the full path for the Cloud Tasks queue
@@ -83,17 +91,20 @@ export const scheduleSessionExpiry = functions.firestore.document('users/{userId
 
       // Try to create and schedule the task
       try {
-          const [response] = await cloudTasksClient.createTask({ parent, task });
-          console.log(`Task created: ${response.name}`);
+        const [response] = await cloudTasksClient.createTask({ parent, task });
+        console.log(`Task created: ${response.name}`);
       } catch (error) {
-          console.error('Error scheduling a task:', error);
-          throw new functions.https.HttpsError('internal', 'Failed to schedule a task.');
+        console.error("Error scheduling a task:", error);
+        throw new functions.https.HttpsError(
+          "internal",
+          "Failed to schedule a task."
+        );
       }
-    } 
-        //else if(beforeSession && !afterSession) { // if it goes in this statement -> it always has a beforeSession (user has to already created the task before)
+    }
+    //else if(beforeSession && !afterSession) { // if it goes in this statement -> it always has a beforeSession (user has to already created the task before)
     //    await callBackDeleteTask(beforeSession);
-   // } 
-});
+    // }
+  });
 
 /**
  * HTTP-triggered Cloud Function.
@@ -102,17 +113,17 @@ export const scheduleSessionExpiry = functions.firestore.document('users/{userId
  */
 
 export const clearSession = functions.https.onRequest(async (req, res) => {
-
   const { userId, sessionId } = req.body; // Destructuring both userId and sessionId from the request body
 
   if (!userId || !sessionId) {
-      console.error("User ID or Session ID not provided in the request body.");
-      res.status(400).send('User ID or Session ID not provided.');
-      return;
+    console.error("User ID or Session ID not provided in the request body.");
+    res.status(400).send("User ID or Session ID not provided.");
+    return;
   }
 
+  console.log("inside clearsession");
 
-  const userRef = admin.firestore().collection('users').doc(userId);
+  const userRef = admin.firestore().collection("users").doc(userId);
   const userSnapshot = await userRef.get();
 
   const currentSession = userSnapshot.data()?.session;
@@ -125,20 +136,24 @@ export const clearSession = functions.https.onRequest(async (req, res) => {
     console.log(`console log 2`);
     console.log("userid: ", userId);
     console.log("sessionId: ", sessionId);
-      try {
-          await userRef.update({ session: null });
-          console.log(`Session cleared for user: ${userId}`);
-          res.status(201).send('Session cleared.');
-      } catch (error) {
-          console.error(`Error clearing session for user ${userId}:`, error);
-          res.status(500).send('Failed to clear session.');
-      }
+    try {
+      await userRef.update({ session: null });
+      console.log(`Session cleared for user: ${userId}`);
+      res.status(201).send("Session cleared.");
+    } catch (error) {
+      console.error(`Error clearing session for user ${userId}:`, error);
+      res.status(500).send("Failed to clear session.");
+    }
   } else {
-        console.log(`console log 3`);
-        console.log("userid: ", userId);
-        console.log("sessionId: ", sessionId);
-      console.log(`Session for user ${userId} has already been ended or updated.`);
-      res.status(200).send(`Session for user ${userId} has already been ended or updated.`);
+    console.log(`console log 3`);
+    console.log("userid: ", userId);
+    console.log("sessionId: ", sessionId);
+    console.log(
+      `Session for user ${userId} has already been ended or updated.`
+    );
+    res
+      .status(200)
+      .send(`Session for user ${userId} has already been ended or updated.`);
   }
 });
 
@@ -166,7 +181,7 @@ export const clearSession = functions.https.onRequest(async (req, res) => {
 // // function to delete the cloud task via cloud task client
 // async function deleteTask(taskIdentifier: string) {
 //     try {
-//         // Construct the full task name 
+//         // Construct the full task name
 //         const taskName = `projects/${PROJECT_ID}/locations/${LOCATION}/queues/${QUEUE}/tasks/${taskIdentifier}`;
 
 //         // Delete the task from the Cloud Task Queue
@@ -196,7 +211,3 @@ export const clearSession = functions.https.onRequest(async (req, res) => {
 //         taskIdentifier : taskIdentifier
 //     })
 // };
-
-
-
-
