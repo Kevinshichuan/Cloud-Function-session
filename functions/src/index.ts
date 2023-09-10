@@ -1,10 +1,13 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
-import { projectID } from 'firebase-functions/params';
+//import { projectID } from 'firebase-functions/params';
 
 const { CloudTasksClient } = require('@google-cloud/tasks');
 
 const { createHash } = require('crypto');
+
+// limits for the cloud tasks
+const MAX_TASKS_ALLOWED_PER_DAY = 1000;  // Set your desired limit
 
 // Initialize Firebase Admin SDK to interact with Firebase services
 admin.initializeApp();
@@ -14,9 +17,9 @@ const cloudTasksClient = new CloudTasksClient();
 
 // Constants for setting up Google Cloud Tasks
 // !!! We dont have it yet until we set up the gcp 
-const PROJECT_ID = 'PROJECT_ID';   // Replace with Firebase Project ID
-const QUEUE = '=QUEUE_NAME';        // Replace with Cloud Tasks Queue name
-const LOCATION = 'LOCATION';       // Replace with the location of Cloud Tasks queue
+const PROJECT_ID = 'geogrind-ab91e';   // Replace with Firebase Project ID
+const QUEUE = 'Sessionscheduler';        // Replace with Cloud Tasks Queue name
+const LOCATION = 'northamerica-northeast1';       // Replace with the location of Cloud Tasks queue
 
 const FUNCTION_URL = `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net/clearSession`;  // The URL endpoint the task will hit
 
