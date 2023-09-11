@@ -1,10 +1,10 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-//import { projectID } from 'firebase-functions/params';
+// import { projectID } from 'firebase-functions/params';
+import {CloudTasksClient} from "@google-cloud/tasks";
+// const {CloudTasksClient} = require("@google-cloud/tasks");
 
-const { CloudTasksClient } = require("@google-cloud/tasks");
-
-//const { createHash } = require('crypto');
+// const { createHash } = require('crypto');
 
 // limits for the cloud tasks
 
@@ -18,15 +18,21 @@ const cloudTasksClient = new CloudTasksClient();
 // !!! We dont have it yet until we set up the gcp
 const PROJECT_ID = "geogrind-ab91e"; // Replace with Firebase Project ID
 const QUEUE = "Sessionscheduler"; // Replace with Cloud Tasks Queue name
-const LOCATION = "northamerica-northeast1"; // Replace with the location of Cloud Tasks queue
+// Replace with the location of Cloud Tasks queue
 
-const FUNCTION_URL = `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net/clearSession`; // The URL endpoint the task will hit
+const LOCATION = "us-central1";
+
+// The URL endpoint the task will hit
+const FUNCTION_URL = `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net/clearSession`;
 
 /**
- * Firestore trigger that listens for new user documents.
- * Once a user document is created, it schedules a task to clear their session after their specified DurationTime.
- * change
+ *
+ * Firestore trigger that listens for new user
+ * documents.Once a user document is created,
+ * it schedules a task to clear their session after their
+ * specified DurationTime. change
  */
+
 
 export const scheduleSessionExpiry = functions.firestore
   .document("users/{userId}")
@@ -37,9 +43,9 @@ export const scheduleSessionExpiry = functions.firestore
     console.log("before if");
     // If session was updated from null to a non-null value, proceed
     if (!beforeSession && afterSession) {
-      console.log(`console log for schedule null to non-null`);
+      console.log("console log for schedule null to non-null");
 
-      const { startTime, stopTime, id } = afterSession;
+      const {startTime, stopTime, id} = afterSession;
 
       // Error handling: Ensure both startTime and endTime are valid numbers
       if (typeof startTime !== "number" || typeof stopTime !== "number") {
@@ -56,29 +62,32 @@ export const scheduleSessionExpiry = functions.firestore
       const userId = context.params.userId;
 
       // Generate the unique task id for the task
-      //const taskUniqueId = generateUniqueTaskIdentifier(sessionID, userId);
+      // const taskUniqueId = generateUniqueTaskIdentifier(sessionID, userId);
 
-      // store the task identifier in the firestore along with the user's document
-      //await storeTaskIdentifierInFireStore(sessionID, userId, taskUniqueId);
+      // store the task identifier in the firestore along with
+      // the user's document
+      // await storeTaskIdentifierInFireStore(sessionID, userId, taskUniqueId);
 
-      // Define the task to be scheduled. It will make an HTTP POST request to the `clearSession` function
+      // Define the task to be scheduled. It will make an HTTP POST request to
+      // the `clearSession` function
       // this structure is followed by the article that I provided at the begin
       const task = {
         httpRequest: {
-          httpMethod: "POST",
+          httpMethod: "POST" as const,
           url: FUNCTION_URL,
           body: Buffer.from(
             JSON.stringify({
               userId: userId,
               sessionId: sessionID, // Including sessionId in the task payload
-              //taskId: taskUniqueId,
+              // taskId: taskUniqueId,
             })
           ).toString("base64"),
           headers: {
             "Content-Type": "application/json",
           },
         },
-        // Set the scheduled time for the task based on the current time + DurationTime
+        // Set the scheduled time for the task based on the current time +
+        // DurationTime
         // convert milsecond to sec
         scheduleTime: {
           seconds:
@@ -91,7 +100,7 @@ export const scheduleSessionExpiry = functions.firestore
 
       // Try to create and schedule the task
       try {
-        const [response] = await cloudTasksClient.createTask({ parent, task });
+        const [response] = await cloudTasksClient.createTask({parent, task});
         console.log(`Task created: ${response.name}`);
       } catch (error) {
         console.error("Error scheduling a task:", error);
@@ -101,7 +110,9 @@ export const scheduleSessionExpiry = functions.firestore
         );
       }
     }
-    //else if(beforeSession && !afterSession) { // if it goes in this statement -> it always has a beforeSession (user has to already created the task before)
+    // else if(beforeSession && !afterSession) { // if it
+    // goes in this statement -> it always has a
+    // beforeSession (user has to already created the task before)
     //    await callBackDeleteTask(beforeSession);
     // }
   });
@@ -112,67 +123,81 @@ export const scheduleSessionExpiry = functions.firestore
  * This function is hit by the url that I defined above
  */
 
-export const clearSession = functions.https.onRequest(async (req, res) => {
-  const { userId, sessionId } = req.body; // Destructuring both userId and sessionId from the request body
 
-  if (!userId || !sessionId) {
-    console.error("User ID or Session ID not provided in the request body.");
-    res.status(400).send("User ID or Session ID not provided.");
-    return;
-  }
+export const clearSession = functions.https
+  .onRequest(async (req, res) => {
+    // Destructuring both userId and sessionId
+    const {userId, sessionId} = req.body;
 
-  console.log("inside clearsession");
-
-  const userRef = admin.firestore().collection("users").doc(userId);
-  const userSnapshot = await userRef.get();
-
-  const currentSession = userSnapshot.data()?.session;
-  console.log(`console log 1`);
-  console.log("userid: ", userId);
-  console.log("sessionId: ", sessionId);
-
-  // Check if the sessionId from the Cloud Task matches the current sessionId in the Firestore document
-  if (currentSession && currentSession.sessionId === sessionId) {
-    console.log(`console log 2`);
-    console.log("userid: ", userId);
-    console.log("sessionId: ", sessionId);
-    try {
-      await userRef.update({ session: null });
-      console.log(`Session cleared for user: ${userId}`);
-      res.status(201).send("Session cleared.");
-    } catch (error) {
-      console.error(`Error clearing session for user ${userId}:`, error);
-      res.status(500).send("Failed to clear session.");
+    if (!userId || !sessionId) {
+      console.error("User ID or Session ID not provided in the request body.");
+      res.status(400).send("User ID or Session ID not provided.");
+      return;
     }
-  } else {
-    console.log(`console log 3`);
+
+    console.log("inside clearsession");
+
+    const userRef = admin.firestore().collection("users").doc(userId);
+    const userSnapshot = await userRef.get();
+
+    const currentSession = userSnapshot.data()?.session;
+    console.log("console log 1");
     console.log("userid: ", userId);
     console.log("sessionId: ", sessionId);
-    console.log(
-      `Session for user ${userId} has already been ended or updated.`
-    );
-    res
-      .status(200)
-      .send(`Session for user ${userId} has already been ended or updated.`);
-  }
-});
+    // Check if the sessionId from the Cloud Task matches the current sessionId
+    // in the Firestore document
+    if (currentSession && currentSession.sessionId === sessionId) {
+      console.log("console log 2");
+      console.log("userid: ", userId);
+      console.log("sessionId: ", sessionId);
+      try {
+        await userRef.update({session: null});
+        console.log(`Session cleared for user: ${userId}`);
+        res.status(201).send("Session cleared.");
+      } catch (error) {
+        console.error(`Error clearing session for user ${userId}:`, error);
+        res.status(500).send("Failed to clear session.");
+      }
+    } else {
+      console.log("console log 3");
+      console.log("userid: ", userId);
+      console.log("sessionId: ", sessionId);
+      console.log(
+        `Session for user ${userId} has already been ended or updated.`
+      );
+      res
+        .status(200)
+        .send(`Session for user ${userId} has already been ended or updated.`);
+    }
+  });
 
 /*
     CallBack function to delete a scheduled cloud task
     Intuition:
-        1. When the session is updated and we schedule a task to clear it after a certain duration, create unique task identifier based on the session ID -> allow to associate the task with the specific session
-        
-        2. Store the unique task identifier in the Firestore document associated with the session
+        1. When the session is updated and we schedule a task to clear it
+        after a certain duration, create unique task identifier based on
+        the session ID ->
+        allow to associate the task with the specific session
 
-        3. When schedule a new task for the session, check if the session still exists in Firestore before scheduling the task. If the session has been deleted, do not schedule a new task
+        2. Store the unique task identifier
+        in the Firestore document associated with the session
 
-        4. To cancel a scheduled task, we can use the Cloud Tasks client to delete it based on the unique task identifier that we created on step one. This ensures that even if a session is deleted, any previously scheduled tasks associated with it can be canceled.
-*/
+        3. When schedule a new task for the session,
+        check if the session still exists in Firestore before
+        scheduling the task. If the session has been deleted,
+        do not schedule a new task
+
+        4. To cancel a scheduled task, we can use the Cloud Tasks
+        client to delete it based on the unique task identifier that
+        we created on step one. This ensures that even if a session is deleted,
+        any previously scheduled tasks associated with it can be canceled.
+
 
 // // Call Back function to detect if the session has been changed
 // async function callBackDeleteTask(beforeSession: any) {
 //     // get the data before the change and after the change
-//     // if there is no afterSession -> the user doesn't create any other session after stop the previous session
+//     // if there is no afterSession -> the user doesn't create
+//     // any other session after stop the previous session
 //     // just delete the task
 //     const taskIdentifier = beforeSession.taskIdentifier ;
 //     await deleteTask(taskIdentifier); // delete all the tasks remaining
@@ -182,7 +207,9 @@ export const clearSession = functions.https.onRequest(async (req, res) => {
 // async function deleteTask(taskIdentifier: string) {
 //     try {
 //         // Construct the full task name
-//         const taskName = `projects/${PROJECT_ID}/locations/${LOCATION}/queues/${QUEUE}/tasks/${taskIdentifier}`;
+//         const taskName =
+// `projects/${PROJECT_ID}/locations/${LOCATION}/
+// queues/${QUEUE}/tasks/${taskIdentifier}`;
 
 //         // Delete the task from the Cloud Task Queue
 //         await cloudTasksClient.deleteTask({ name: taskName });
@@ -202,7 +229,8 @@ export const clearSession = functions.https.onRequest(async (req, res) => {
 // };
 
 // // helper function to store the task identifier to the firestore database
-// async function storeTaskIdentifierInFireStore(sessionId: any, userId: any, taskIdentifier: any) {
+// async function storeTaskIdentifierInFireStore(sessionId: any, userId:
+// any, taskIdentifier: any) {
 //     // Reference to the user's document
 //     const userRef = admin.firestore().collection('users').doc(userId);
 
@@ -211,3 +239,6 @@ export const clearSession = functions.https.onRequest(async (req, res) => {
 //         taskIdentifier : taskIdentifier
 //     })
 // };
+
+
+*/
