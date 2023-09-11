@@ -24,9 +24,8 @@ CLOUD-FUNCTION-SESSION
 
 
 TODO:
-1. Configuration of Cloud Tasks
-2. Check the unique Session id or callback the tasks
-3. Testing (local and remote)
+1. Callback is not working
+2. Testing and usage limited 
 
 
 
