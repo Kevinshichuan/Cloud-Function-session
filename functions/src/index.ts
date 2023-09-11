@@ -24,7 +24,6 @@ const LOCATION = "us-central1";
 
 // The URL endpoint the task will hit
 const FUNCTION_URL = `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net/clearSession`;
-
 /**
  *
  * Firestore trigger that listens for new user
@@ -61,6 +60,9 @@ export const scheduleSessionExpiry = functions.firestore
       const sessionID = id;
       const userId = context.params.userId;
 
+      console.log("Session ID:", sessionID);
+      console.log("User ID:", userId);
+      
       // Generate the unique task id for the task
       // const taskUniqueId = generateUniqueTaskIdentifier(sessionID, userId);
 
@@ -128,7 +130,8 @@ export const clearSession = functions.https
   .onRequest(async (req, res) => {
     // Destructuring both userId and sessionId
     const {userId, sessionId} = req.body;
-
+    console.log("Session ID:", sessionId);
+    console.log("User ID:", userId);
     if (!userId || !sessionId) {
       console.error("User ID or Session ID not provided in the request body.");
       res.status(400).send("User ID or Session ID not provided.");
@@ -144,9 +147,10 @@ export const clearSession = functions.https
     console.log("console log 1");
     console.log("userid: ", userId);
     console.log("sessionId: ", sessionId);
+    console.log("current sessionId: ", currentSession.id);
     // Check if the sessionId from the Cloud Task matches the current sessionId
     // in the Firestore document
-    if (currentSession && currentSession.sessionId === sessionId) {
+    if (currentSession && currentSession.id === sessionId) {
       console.log("console log 2");
       console.log("userid: ", userId);
       console.log("sessionId: ", sessionId);
